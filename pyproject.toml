@@ -1,0 +1,7 @@
+[tool.uv.workspace]
+members = [
+ "src/ai-tarot-reader-backend",
+ "src/ai-tatrot-reader-ml-layer",
+]
+
+
