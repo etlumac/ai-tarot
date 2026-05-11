@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -121,9 +121,9 @@ class CardSchema(BaseModel):
     )
 
 
-MessageSchemaType = Union[
-    MessageSchema,
-    CardSchema,
+MessageSchemaType = Annotated[
+    Union[MessageSchema, CardSchema],
+    Field(discriminator="object_type"),
 ]
 
 
@@ -133,7 +133,7 @@ class SessionResponse(BaseModel):
     tone: Tone
     title: Optional[str]
     theme: Optional[Theme]
-    messages: List[MessageSchemaType] = Field(..., discriminator="object_type")
+    messages: List[MessageSchemaType]
 
     model_config = ConfigDict(
         alias_generator=to_camel,
