@@ -27,6 +27,11 @@ class ErrorResponse(BaseModel):
     )
 
 
+class InfrastructureError(BaseAppError):
+    error_code = "InfrastructureError"
+    status_code = 503
+
+
 class ValidationError(BaseAppError):
     error_code: ClassVar[str] = "ValidationError"
     status_code: ClassVar[int] = 400
