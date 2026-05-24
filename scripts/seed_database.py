@@ -1,21 +1,24 @@
 import json
+import os
 import psycopg2
-from psycopg2.extras import execute_values
 from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DB_CONFIG = {
     "host": "",
-    "port": 0,
+    "port": "",
     "dbname": "",
     "user": "",
     "password": "",
     "options": "",
 }
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 GOLD_DIR = DATA_DIR / "gold_cards"
 PINK_DIR = DATA_DIR / "pink_cards"
+GRAPH_NAME = "tarot_graph"
 
 MAJOR_ORDER = [
     "the-fool", "the-magician", "the-high-priestess", "the-empress",
@@ -52,117 +55,72 @@ def slug_to_filename(slug: str) -> str:
     return slug
 
 
-def get_connection():
-    return psycopg2.connect(**DB_CONFIG)
+def esc_cypher(s: str) -> str:
+    if s is None:
+        return "null"
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def init_schema(cur):
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS cards (
-            id          SERIAL PRIMARY KEY,
-            slug        VARCHAR(100) UNIQUE NOT NULL,
-            name        VARCHAR(200) NOT NULL,
-            name_en     VARCHAR(200),
-            arcana      VARCHAR(20) NOT NULL,
-            suit        VARCHAR(20),
-            rank_order  INTEGER NOT NULL,
-            description JSONB
-        );
+def init_graph(cur):
+    cur.execute("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = %s", [GRAPH_NAME])
+    exists = cur.fetchone()[0]
+    if exists:
+        cur.execute("SELECT drop_graph('%s', true)" % GRAPH_NAME)
+        print(f"  [DROP] Старый граф '{GRAPH_NAME}' удалён")
 
-        CREATE TABLE IF NOT EXISTS card_images (
-            id          SERIAL PRIMARY KEY,
-            card_id     INTEGER REFERENCES cards(id) ON DELETE CASCADE,
-            theme       VARCHAR(50) NOT NULL,
-            filename    VARCHAR(200) NOT NULL,
-            UNIQUE(card_id, theme)
-        );
-
-        CREATE TABLE IF NOT EXISTS card_combinations (
-            id              SERIAL PRIMARY KEY,
-            card1_id        INTEGER REFERENCES cards(id) ON DELETE CASCADE,
-            card2_id        INTEGER REFERENCES cards(id) ON DELETE CASCADE,
-            short_meaning   TEXT NOT NULL,
-            UNIQUE(card1_id, card2_id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_cards_slug ON cards(slug);
-        CREATE INDEX IF NOT EXISTS idx_cards_arcana ON cards(arcana);
-        CREATE INDEX IF NOT EXISTS idx_card_images_card ON card_images(card_id);
-        CREATE INDEX IF NOT EXISTS idx_card_images_theme ON card_images(theme);
-        CREATE INDEX IF NOT EXISTS idx_combos_card1 ON card_combinations(card1_id);
-        CREATE INDEX IF NOT EXISTS idx_combos_card2 ON card_combinations(card2_id);
-    """)
-    print("  [OK] Таблицы созданы / проверены")
+    cur.execute("SELECT create_graph('%s')" % GRAPH_NAME)
+    print(f"  [OK] Граф '{GRAPH_NAME}' создан")
 
 
 def seed_cards(cur, cards):
-    rows = []
     for i, card in enumerate(cards):
         slug = card["slug"]
         name = card.get("name", card.get("name_ru", slug))
         arcana = card.get("arcana", "major")
         name_en = card.get("name_en", card.get("id", ""))
 
-        suit = None
+        suit = "null"
         if arcana == "minor":
             for s in SUITS:
                 if f"-of-{s}" in slug:
-                    suit = s
+                    suit = esc_cypher(s)
                     break
 
         desc = card.get("description", {})
-        rows.append((slug, name, name_en, arcana, suit, i, json.dumps(desc, ensure_ascii=False)))
-
-    execute_values(cur, """
-        INSERT INTO cards (slug, name, name_en, arcana, suit, rank_order, description)
-        VALUES %s
-        ON CONFLICT (slug) DO UPDATE SET
-            name = EXCLUDED.name,
-            name_en = EXCLUDED.name_en,
-            arcana = EXCLUDED.arcana,
-            suit = EXCLUDED.suit,
-            rank_order = EXCLUDED.rank_order,
-            description = EXCLUDED.description
-    """, rows)
-    print(f"  [OK] Загружено {len(rows)} карт")
-
-    cur.execute("SELECT slug, id FROM cards")
-    return {row[0]: row[1] for row in cur.fetchall()}
-
-
-def seed_images(cur, cards, slug_to_id):
-    rows = []
-    for card in cards:
-        slug = card["slug"]
-        db_id = slug_to_id.get(slug)
-        if not db_id:
-            continue
+        desc_str = json.dumps(desc, ensure_ascii=False)
+        desc_str = desc_str.replace("\\", "\\\\").replace("'", "\\'")
 
         filename = slug_to_filename(slug)
+        gold_img = f"{filename}.webp" if (GOLD_DIR / f"{filename}.webp").exists() else ""
+        pink_img = f"{filename}.webp" if (PINK_DIR / f"{filename}.webp").exists() else ""
 
-        if (GOLD_DIR / f"{filename}.webp").exists():
-            rows.append((db_id, "gold", f"{filename}.webp"))
+        query = f"""
+            SELECT * FROM cypher('{GRAPH_NAME}', $$
+                CREATE (c:Card {{
+                    slug: {esc_cypher(slug)},
+                    name: {esc_cypher(name)},
+                    name_en: {esc_cypher(name_en)},
+                    arcana: {esc_cypher(arcana)},
+                    suit: {suit},
+                    rank_order: {i},
+                    description: '{desc_str}',
+                    gold_image: {esc_cypher(gold_img)},
+                    pink_image: {esc_cypher(pink_img)}
+                }})
+                RETURN c
+            $$) AS (v agtype)
+        """
+        cur.execute(query)
 
-        if (PINK_DIR / f"{filename}.webp").exists():
-            rows.append((db_id, "pink", f"{filename}.webp"))
-
-    execute_values(cur, """
-        INSERT INTO card_images (card_id, theme, filename)
-        VALUES %s
-        ON CONFLICT (card_id, theme) DO UPDATE SET filename = EXCLUDED.filename
-    """, rows)
-    print(f"  [OK] Загружено {len(rows)} картинок")
+    print(f"  [OK] Создано {len(cards)} вершин Card")
 
 
-def seed_combinations(cur, cards, slug_to_id):
+def seed_combinations(cur, cards):
     seen = set()
-    rows = []
+    count = 0
 
     for card in cards:
         card1_slug = card["slug"]
-        card1_id = slug_to_id.get(card1_slug)
-        if not card1_id:
-            continue
 
         for combo in card.get("combinations", []):
             combo_slug = combo.get("combination_slug", "")
@@ -175,22 +133,108 @@ def seed_combinations(cur, cards, slug_to_id):
                 continue
 
             card2_slug = parts[1]
-            card2_id = slug_to_id.get(card2_slug)
-            if not card2_id:
-                continue
 
-            pair = (min(card1_id, card2_id), max(card1_id, card2_id))
+            pair = tuple(sorted([card1_slug, card2_slug]))
             if pair in seen:
                 continue
             seen.add(pair)
-            rows.append((pair[0], pair[1], short_meaning))
 
-    execute_values(cur, """
-        INSERT INTO card_combinations (card1_id, card2_id, short_meaning)
-        VALUES %s
-        ON CONFLICT (card1_id, card2_id) DO UPDATE SET short_meaning = EXCLUDED.short_meaning
-    """, rows)
-    print(f"  [OK] Загружено {len(rows)} комбинаций")
+            meaning_escaped = esc_cypher(short_meaning)
+
+            query = f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (a:Card {{slug: "{pair[0]}"}})
+                    MATCH (b:Card {{slug: "{pair[1]}"}})
+                    CREATE (a)-[r:COMBINES_WITH {{short_meaning: {meaning_escaped}}}]->(b)
+                    RETURN r
+                $$) AS (e agtype)
+            """
+            cur.execute(query)
+            count += 1
+
+    print(f"  [OK] Создано {count} рёбер COMBINES_WITH")
+
+
+def verify(cur):
+    print("\n── Проверка ──")
+
+    cur.execute(f"""
+        SELECT * FROM cypher('{GRAPH_NAME}', $$
+            MATCH (c:Card)
+            RETURN count(c) AS cnt
+        $$) AS (cnt agtype)
+    """)
+    row = cur.fetchone()
+
+    import re
+    val = row[0]
+    match = re.search(r'(\d+)', str(val))
+    cnt = int(match.group(1)) if match else 0
+    total_cards = cnt
+    print(f"  Card (вершины):    {cnt}")
+
+    cur.execute(f"""
+        SELECT * FROM cypher('{GRAPH_NAME}', $$
+            MATCH ()-[r:COMBINES_WITH]->()
+            RETURN count(r) AS cnt
+        $$) AS (cnt agtype)
+    """)
+    row = cur.fetchone()
+    val = row[0]
+    match = re.search(r'(\d+)', str(val))
+    cnt = int(match.group(1)) if match else 0
+    print(f"  COMBINES_WITH:     {cnt}")
+
+    cur.execute(f"""
+        SELECT * FROM cypher('{GRAPH_NAME}', $$
+            MATCH (c:Card)
+            WHERE c.rank_order < 3
+            RETURN c.slug, c.name, c.arcana, c.gold_image, c.pink_image
+            ORDER BY c.rank_order
+        $$) AS (slug agtype, name agtype, arcana agtype, gold agtype, pink agtype)
+    """)
+    print("\n  Пример карт:")
+    for row in cur.fetchall():
+        slug = row[0]
+        name = row[1]
+        arcana = row[2]
+        for val in [slug, name, arcana]:
+            s = str(val).strip('"').strip("'")
+            if s:
+                print(f"    {s}", end=" | ")
+        print()
+
+    cur.execute(f"""
+        SELECT * FROM cypher('{GRAPH_NAME}', $$
+            MATCH (a:Card)-[r:COMBINES_WITH]->(b:Card)
+            WHERE a.rank_order = 0
+            RETURN a.name, b.name, r.short_meaning
+            LIMIT 5
+        $$) AS (name1 agtype, name2 agtype, meaning agtype)
+    """)
+    print("\n  Пример комбинаций:")
+    for row in cur.fetchall():
+        parts = []
+        for val in row:
+            s = str(val).strip('"').strip("'")
+            if s:
+                parts.append(s)
+        if len(parts) >= 3:
+            print(f"    {parts[0]:25s} + {parts[1]:25s} = {parts[2]}")
+
+    cur.execute(f"""
+        SELECT * FROM cypher('{GRAPH_NAME}', $$
+            MATCH (c:Card)
+            WHERE c.suit IS NOT NULL
+            RETURN count(c) AS cnt
+        $$) AS (cnt agtype)
+    """)
+    row = cur.fetchone()
+    val = str(row[0])
+    match = re.search(r'(\d+)', val)
+    minor = int(match.group(1)) if match else 0
+    print(f"\n  Minor (suit != null): {minor}")
+    print(f"  Major (suit = null):  {total_cards - minor}")
 
 
 def main():
@@ -199,57 +243,35 @@ def main():
     print(f"Загружено {len(cards)} карт из tarot_cards.json\n")
 
     print(f"Подключение к {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}...")
-    conn = get_connection()
-    conn.autocommit = False
+    conn = psycopg2.connect(**DB_CONFIG)
+    conn.autocommit = True
     cur = conn.cursor()
 
     try:
-        print("1. Инициализация схемы...")
-        init_schema(cur)
-        conn.commit()
+        print("Загрузка Apache AGE...")
+        cur.execute("LOAD 'age';")
+        cur.execute("SET search_path TO ag_catalog, public;")
+        print("  [OK] AGE загружен")
 
-        print("2. Загрузка карт...")
-        slug_to_id = seed_cards(cur, cards)
-        conn.commit()
+        print("\n1. Инициализация графа...")
+        init_graph(cur)
 
-        print("3. Загрузка картинок...")
-        seed_images(cur, cards, slug_to_id)
-        conn.commit()
+        print("\n2. Создание вершин Card...")
+        seed_cards(cur, cards)
 
-        print("4. Загрузка комбинаций...")
-        seed_combinations(cur, cards, slug_to_id)
-        conn.commit()
+        print("\n3. Создание рёбер COMBINES_WITH...")
+        seed_combinations(cur, cards)
 
-        print("\n── Проверка ──")
-        cur.execute("SELECT COUNT(*) FROM cards")
-        print(f"  cards:              {cur.fetchone()[0]}")
-        cur.execute("SELECT COUNT(*) FROM card_images")
-        print(f"  card_images:        {cur.fetchone()[0]}")
-        cur.execute("SELECT COUNT(*) FROM card_combinations")
-        print(f"  card_combinations:  {cur.fetchone()[0]}")
-
-        cur.execute("SELECT slug, name, arcana FROM cards LIMIT 3")
-        print("\n  Пример карт:")
-        for row in cur.fetchall():
-            print(f"    {row[0]:30s} | {row[1]:25s} | {row[2]}")
-
-        cur.execute("""
-            SELECT c.name, ci.theme, ci.filename
-            FROM card_images ci
-            JOIN cards c ON c.id = ci.card_id
-            LIMIT 4
-        """)
-        print("\n  Пример картинок:")
-        for row in cur.fetchall():
-            print(f"    {row[0]:25s} | {row[1]:5s} | {row[2]}")
+        verify(cur)
 
         print(f"\n{'='*50}")
-        print("Все данные загружены в БД.")
+        print(f"Граф '{GRAPH_NAME}' загружен")
         print(f"{'='*50}")
 
     except Exception as e:
-        conn.rollback()
         print(f"\n[ОШИБКА] {e}")
+        import traceback
+        traceback.print_exc()
         raise
     finally:
         cur.close()
