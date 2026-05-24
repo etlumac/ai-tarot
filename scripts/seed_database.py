@@ -2,7 +2,7 @@ import json
 import os
 import psycopg2
 from pathlib import Path
-
+import re
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -16,49 +16,24 @@ DB_CONFIG = {
 }
 
 DATA_DIR = PROJECT_ROOT / "data"
-GOLD_DIR = DATA_DIR / "gold_cards"
-PINK_DIR = DATA_DIR / "pink_cards"
 GRAPH_NAME = "tarot_graph"
-
-MAJOR_ORDER = [
-    "the-fool", "the-magician", "the-high-priestess", "the-empress",
-    "the-emperor", "the-hierophant", "the-lovers", "the-chariot",
-    "strength", "the-hermit", "wheel-of-fortune", "justice",
-    "the-hanged-man", "death", "temperance", "the-devil",
-    "the-tower", "the-star", "the-moon", "the-sun",
-    "judgement", "the-world",
-]
-
-SUITS = ["wands", "cups", "swords", "pentacles"]
-
-
-def slug_to_filename(slug: str) -> str:
-    slug = slug.lower().replace(" ", "-")
-    for i, m_slug in enumerate(MAJOR_ORDER):
-        if slug == m_slug or slug == f"the-{m_slug}":
-            return f"{i:02d}_{m_slug}"
-    from re import match
-    m = match(r"^([\w-]+)-of-(\w+)$", slug)
-    if m:
-        rank_raw, suit = m.group(1), m.group(2)
-        rank_map = {
-            "ace": "ace", "two": "02", "2": "02", "three": "03", "3": "03",
-            "four": "04", "4": "04", "five": "05", "5": "05",
-            "six": "06", "6": "06", "seven": "07", "7": "07",
-            "eight": "08", "8": "08", "nine": "09", "9": "09",
-            "ten": "10", "page": "page", "knight": "knight",
-            "queen": "queen", "king": "king",
-        }
-        rank = rank_map.get(rank_raw)
-        if rank and suit in SUITS:
-            return f"{suit}_{rank}"
-    return slug
 
 
 def esc_cypher(s: str) -> str:
     if s is None:
         return "null"
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def build_meaning(desc: dict) -> str:
+    if not desc or not isinstance(desc, dict):
+        return ""
+    parts = []
+    for key in ("intro", "archetype", "key_meaning", "symbolism"):
+        val = desc.get(key, "").strip()
+        if val:
+            parts.append(val)
+    return "\n\n".join(parts)
 
 
 def init_graph(cur):
@@ -74,38 +49,22 @@ def init_graph(cur):
 
 def seed_cards(cur, cards):
     for i, card in enumerate(cards):
-        slug = card["slug"]
-        name = card.get("name", card.get("name_ru", slug))
+        card_id = i
+        title = card.get("name", card.get("name_ru", ""))
         arcana = card.get("arcana", "major")
-        name_en = card.get("name_en", card.get("id", ""))
+        meaning = build_meaning(card.get("description", {}))
+        reversed_val = "false"
 
-        suit = "null"
-        if arcana == "minor":
-            for s in SUITS:
-                if f"-of-{s}" in slug:
-                    suit = esc_cypher(s)
-                    break
-
-        desc = card.get("description", {})
-        desc_str = json.dumps(desc, ensure_ascii=False)
-        desc_str = desc_str.replace("\\", "\\\\").replace("'", "\\'")
-
-        filename = slug_to_filename(slug)
-        gold_img = f"{filename}.webp" if (GOLD_DIR / f"{filename}.webp").exists() else ""
-        pink_img = f"{filename}.webp" if (PINK_DIR / f"{filename}.webp").exists() else ""
+        meaning_escaped = esc_cypher(meaning)
 
         query = f"""
             SELECT * FROM cypher('{GRAPH_NAME}', $$
                 CREATE (c:Card {{
-                    slug: {esc_cypher(slug)},
-                    name: {esc_cypher(name)},
-                    name_en: {esc_cypher(name_en)},
+                    card_id: {card_id},
+                    title: {esc_cypher(title)},
+                    meaning: {meaning_escaped},
                     arcana: {esc_cypher(arcana)},
-                    suit: {suit},
-                    rank_order: {i},
-                    description: '{desc_str}',
-                    gold_image: {esc_cypher(gold_img)},
-                    pink_image: {esc_cypher(pink_img)}
+                    reversed: {reversed_val}
                 }})
                 RETURN c
             $$) AS (v agtype)
@@ -115,12 +74,15 @@ def seed_cards(cur, cards):
     print(f"  [OK] Создано {len(cards)} вершин Card")
 
 
-def seed_combinations(cur, cards):
+def seed_relationships(cur, cards):
+    slug_to_id = {card["slug"]: i for i, card in enumerate(cards)}
+
     seen = set()
     count = 0
 
     for card in cards:
         card1_slug = card["slug"]
+        card1_id = slug_to_id[card1_slug]
 
         for combo in card.get("combinations", []):
             combo_slug = combo.get("combination_slug", "")
@@ -132,9 +94,12 @@ def seed_combinations(cur, cards):
             if len(parts) != 2:
                 continue
 
-            card2_slug = parts[1]
+            card2_slug = parts[0] if parts[1] == card1_slug else parts[1]
+            if card2_slug not in slug_to_id:
+                continue
+            card2_id = slug_to_id[card2_slug]
 
-            pair = tuple(sorted([card1_slug, card2_slug]))
+            pair = tuple(sorted([card1_id, card2_id]))
             if pair in seen:
                 continue
             seen.add(pair)
@@ -142,22 +107,24 @@ def seed_combinations(cur, cards):
             meaning_escaped = esc_cypher(short_meaning)
 
             query = f"""
-                SELECT * FROM cypher('{GRAPH_NAME}', $$
-                    MATCH (a:Card {{slug: "{pair[0]}"}})
-                    MATCH (b:Card {{slug: "{pair[1]}"}})
-                    CREATE (a)-[r:COMBINES_WITH {{short_meaning: {meaning_escaped}}}]->(b)
+                SELECT * FROM cypher('{GRAPH_NAME}', $$                     MATCH (a:Card {{card_id: {pair[0]}}})
+                    MATCH (b:Card {{card_id: {pair[1]}}})
+                    CREATE (a)-[r:Card_relationship {{
+                        relation_id: {count},
+                        from_card_id: {pair[0]},
+                        to_card_id: {pair[1]},
+                        meaning: {meaning_escaped}
+                    }}]->(b)
                     RETURN r
                 $$) AS (e agtype)
             """
             cur.execute(query)
             count += 1
 
-    print(f"  [OK] Создано {count} рёбер COMBINES_WITH")
+    print(f"  [OK] Создано {count} рёбер Card_relationship")
 
 
 def verify(cur):
-    print("\n── Проверка ──")
-
     cur.execute(f"""
         SELECT * FROM cypher('{GRAPH_NAME}', $$
             MATCH (c:Card)
@@ -165,58 +132,53 @@ def verify(cur):
         $$) AS (cnt agtype)
     """)
     row = cur.fetchone()
-
-    import re
-    val = row[0]
-    match = re.search(r'(\d+)', str(val))
-    cnt = int(match.group(1)) if match else 0
-    total_cards = cnt
-    print(f"  Card (вершины):    {cnt}")
+    val = str(row[0])
+    match = re.search(r'(\d+)', val)
+    total_cards = int(match.group(1)) if match else 0
+    print(f"\n  Card (вершины):         {total_cards}")
 
     cur.execute(f"""
         SELECT * FROM cypher('{GRAPH_NAME}', $$
-            MATCH ()-[r:COMBINES_WITH]->()
+            MATCH ()-[r:Card_relationship]->()
             RETURN count(r) AS cnt
         $$) AS (cnt agtype)
     """)
     row = cur.fetchone()
-    val = row[0]
-    match = re.search(r'(\d+)', str(val))
-    cnt = int(match.group(1)) if match else 0
-    print(f"  COMBINES_WITH:     {cnt}")
+    val = str(row[0])
+    match = re.search(r'(\d+)', val)
+    rel_count = int(match.group(1)) if match else 0
+    print(f"  Card_relationship:      {rel_count}")
 
     cur.execute(f"""
         SELECT * FROM cypher('{GRAPH_NAME}', $$
             MATCH (c:Card)
-            WHERE c.rank_order < 3
-            RETURN c.slug, c.name, c.arcana, c.gold_image, c.pink_image
-            ORDER BY c.rank_order
-        $$) AS (slug agtype, name agtype, arcana agtype, gold agtype, pink agtype)
+            WHERE c.card_id < 3
+            RETURN c.card_id, c.title, c.arcana, c.reversed
+            ORDER BY c.card_id
+        $$) AS (cid agtype, title agtype, arcana agtype, rev agtype)
     """)
     print("\n  Пример карт:")
     for row in cur.fetchall():
-        slug = row[0]
-        name = row[1]
-        arcana = row[2]
-        for val in [slug, name, arcana]:
-            s = str(val).strip('"').strip("'")
+        parts = []
+        for v in row:
+            s = str(v).strip('"').strip("'")
             if s:
-                print(f"    {s}", end=" | ")
-        print()
+                parts.append(s)
+        print(f"    {' | '.join(parts)}")
 
     cur.execute(f"""
         SELECT * FROM cypher('{GRAPH_NAME}', $$
-            MATCH (a:Card)-[r:COMBINES_WITH]->(b:Card)
-            WHERE a.rank_order = 0
-            RETURN a.name, b.name, r.short_meaning
+            MATCH (a:Card)-[r:Card_relationship]->(b:Card)
+            WHERE a.card_id = 0
+            RETURN a.title, b.title, r.meaning
             LIMIT 5
-        $$) AS (name1 agtype, name2 agtype, meaning agtype)
+        $$) AS (title1 agtype, title2 agtype, meaning agtype)
     """)
     print("\n  Пример комбинаций:")
     for row in cur.fetchall():
         parts = []
-        for val in row:
-            s = str(val).strip('"').strip("'")
+        for v in row:
+            s = str(v).strip('"').strip("'")
             if s:
                 parts.append(s)
         if len(parts) >= 3:
@@ -225,16 +187,16 @@ def verify(cur):
     cur.execute(f"""
         SELECT * FROM cypher('{GRAPH_NAME}', $$
             MATCH (c:Card)
-            WHERE c.suit IS NOT NULL
+            WHERE c.arcana = 'major'
             RETURN count(c) AS cnt
         $$) AS (cnt agtype)
     """)
     row = cur.fetchone()
     val = str(row[0])
     match = re.search(r'(\d+)', val)
-    minor = int(match.group(1)) if match else 0
-    print(f"\n  Minor (suit != null): {minor}")
-    print(f"  Major (suit = null):  {total_cards - minor}")
+    major = int(match.group(1)) if match else 0
+    print(f"\n  Major arcana: {major}")
+    print(f"  Minor arcana: {total_cards - major}")
 
 
 def main():
@@ -248,7 +210,7 @@ def main():
     cur = conn.cursor()
 
     try:
-        print("Загрузка Apache AGE...")
+        print("0. Загрузка Apache AGE...")
         cur.execute("LOAD 'age';")
         cur.execute("SET search_path TO ag_catalog, public;")
         print("  [OK] AGE загружен")
@@ -259,8 +221,8 @@ def main():
         print("\n2. Создание вершин Card...")
         seed_cards(cur, cards)
 
-        print("\n3. Создание рёбер COMBINES_WITH...")
-        seed_combinations(cur, cards)
+        print("\n3. Создание рёбер Card_relationship...")
+        seed_relationships(cur, cards)
 
         verify(cur)
 
