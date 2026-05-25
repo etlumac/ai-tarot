@@ -99,6 +99,7 @@ def init_db_connection(db_config: PostgresConfig) -> DatabaseConnection:
         echo=False,
         pool_pre_ping=True,
         pool_size=db_config.pool_size,
+        connect_args={"server_settings": {"search_path": "public"}}
     )
 
     factory = async_sessionmaker(

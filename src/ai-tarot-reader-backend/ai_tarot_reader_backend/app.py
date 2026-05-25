@@ -14,6 +14,7 @@ from ai_tarot_reader_backend.api.routes.user import router as user_router
 from ai_tarot_reader_backend.core.errors import ErrorResponse, BaseAppError
 from ai_tarot_reader_backend.core.database import DatabaseConnection, init_db_connection
 from ai_tarot_reader_backend.configs import set_config, get_config, PathSettings, Config
+from ai_tarot_reader_backend.db import load_models
 
 SERVICE_NAME = "OAPI_TARO_BACKEND/001.00"
 
@@ -21,6 +22,7 @@ SERVICE_NAME = "OAPI_TARO_BACKEND/001.00"
 async def __init_db_connection(config: Config) -> DatabaseConnection:
     db_connection = init_db_connection(config.postgres)
     await db_connection.check_connection()
+    load_models()
     await db_connection.init_schema()
     return db_connection
 

@@ -40,4 +40,5 @@ class MessageRoleType(str, Enum):
 
 
 class UIThemeType(str, Enum):
-    IT = "it"
+    PINK = "pink"
+    GOLD = "gold"

@@ -1,7 +1,7 @@
 postgres:
-  host: localhost
-  port: 5432
-  database: postgres
-  username: postgres
+  host: 93.77.164.57
+  port: 5455
+  database: tarodb
+  username: taro_user
   pool_size: 10
 

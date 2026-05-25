@@ -1,10 +1,10 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
 
 import asyncpg
 from loguru import logger
 from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ai_tarot_reader_backend.core.database import SessionContextError, get_session
 from ai_tarot_reader_backend.core.errors import (
@@ -15,21 +15,18 @@ from ai_tarot_reader_backend.core.errors import (
     ValidationError,
 )
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
 
 @asynccontextmanager
-async def transactional() -> AsyncGenerator[None, None]:
+async def transactional() -> AsyncGenerator[AsyncSession, None]:
     session: AsyncSession = get_session()
 
     if session.get_transaction() is not None:
-        yield
+        yield session
         return
 
     try:
         async with session.begin():
-            yield
+            yield session
     except IntegrityError as e:
         await _map_integrity_error(e)
     except OperationalError as e:
