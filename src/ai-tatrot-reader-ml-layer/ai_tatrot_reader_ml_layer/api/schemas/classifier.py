@@ -7,7 +7,7 @@ from ai_tatrot_reader_ml_layer.entities.enums import ThemeType
 # --- POST /classifier/classify ---
 
 class ClassificationRequest(BaseModel):
-    message: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1, max_length=500)
 
     model_config = ConfigDict(
         alias_generator=to_camel,

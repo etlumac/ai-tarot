@@ -7,7 +7,7 @@ from ai_tatrot_reader_ml_layer.ml.safety_router.router import RouterDecision
 # --- POST /safety-router/validate ---
 
 class ValidationRequest(BaseModel):
-    message: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1, max_length=500)
 
     model_config = ConfigDict(
         alias_generator=to_camel,

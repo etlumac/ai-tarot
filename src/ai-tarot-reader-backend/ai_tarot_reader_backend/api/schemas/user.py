@@ -7,8 +7,8 @@ from pydantic.alias_generators import to_camel
 # --- POST /user ---
 
 class UserCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1)
-    description: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=500)
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -19,8 +19,8 @@ class UserCreateRequest(BaseModel):
 # --- PATCH /user ---
 
 class UserUpdateRequest(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1)
-    description: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=500)
 
     model_config = ConfigDict(
         alias_generator=to_camel,

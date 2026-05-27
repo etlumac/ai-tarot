@@ -1,6 +1,5 @@
 from fastapi import APIRouter
-
-from ai_tarot_reader_backend.api.dependencies import CurrentIpDep, SessionIdDep
+from ai_tarot_reader_backend.api.dependencies import CurrentIpDep, DbSessionDep, SessionIdDep
 from ai_tarot_reader_backend.api.schemas.sessions import (
     PredictionRequest,
     PredictionResponse,
@@ -23,9 +22,11 @@ router = APIRouter(tags=["Sessions"])
         500: {"description": "Internal server error", "model": ErrorResponse},
     },
 )
-async def get_sessions(ip: CurrentIpDep) -> SessionListResponse:
+async def get_sessions(
+    ip: CurrentIpDep,
+    _: DbSessionDep,
+) -> SessionListResponse:
     return await SessionService.get_sessions_by_ip(ip)
-
 
 
 @router.post(
@@ -42,6 +43,7 @@ async def get_sessions(ip: CurrentIpDep) -> SessionListResponse:
 async def create_prediction(
     body: PredictionRequest,
     ip: CurrentIpDep,
+    _: DbSessionDep,
 ) -> PredictionResponse:
     return await SessionService.create_prediction(ip=ip, body=body)
 
@@ -59,6 +61,7 @@ async def create_prediction(
 async def get_session(
     ip: CurrentIpDep,
     session_id: SessionIdDep,
+    _: DbSessionDep,
 ) -> SessionResponse:
     return await SessionService.get_session(ip=ip, session_id=session_id)
 
@@ -78,6 +81,7 @@ async def create_clarification(
         body: ClarificationRequest,
         ip: CurrentIpDep,
         session_id: SessionIdDep,
+        _: DbSessionDep,
 ) -> PredictionResponse:
     return await SessionService.create_clarification(ip=ip, session_id=session_id, body=body)
 

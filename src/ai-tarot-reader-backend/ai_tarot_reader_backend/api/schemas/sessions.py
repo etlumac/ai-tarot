@@ -75,7 +75,7 @@ class SessionListResponse(BaseModel):
 
 class PredictionRequest(BaseModel):
     tone: Tone
-    message: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1, max_length=500)
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -145,7 +145,7 @@ class SessionResponse(BaseModel):
 # --- POST /session/clarification ---
 
 class ClarificationRequest(BaseModel):
-    message: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1, max_length=500)
 
     model_config = ConfigDict(
         alias_generator=to_camel,
