@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Response
 
-from ai_tarot_reader_backend.api.dependencies import CurrentIpDep
+from ai_tarot_reader_backend.api.dependencies import CurrentIpDep, DbSessionDep
 from ai_tarot_reader_backend.api.schemas.user import (
     UserCreateRequest,
     UserResponse,
@@ -18,12 +18,14 @@ router = APIRouter(tags=["User"])
     status_code=200,
     responses={
         400: {"description": "Validation error", "model": ErrorResponse},
+        409: {"description": "User already exists", "model": ErrorResponse},
         500: {"description": "Internal server error", "model": ErrorResponse},
     },
 )
 async def create_user(
     body: UserCreateRequest,
     ip: CurrentIpDep,
+    _: DbSessionDep,
 ) -> Response:
     await UserService.create_user(ip=ip, body=body)
     return Response(status_code=200)
@@ -42,6 +44,7 @@ async def create_user(
 async def update_user(
     body: UserUpdateRequest,
     ip: CurrentIpDep,
+    _: DbSessionDep,
 ) -> UserUpdateResponse:
     return await UserService.update_user(ip=ip, body=body)
 
@@ -55,5 +58,8 @@ async def update_user(
         500: {"description": "Internal server error", "model": ErrorResponse},
     },
 )
-async def get_user(ip: CurrentIpDep) -> UserResponse:
+async def get_user(
+    ip: CurrentIpDep,
+    _: DbSessionDep,
+) -> UserResponse:
     return await UserService.get_user(ip=ip)
