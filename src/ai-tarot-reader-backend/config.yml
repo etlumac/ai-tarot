@@ -5,3 +5,5 @@ postgres:
   username: taro_user
   pool_size: 10
 
+ml_layer:
+  base_url: http://localhost:8001

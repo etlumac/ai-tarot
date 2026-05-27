@@ -10,7 +10,6 @@ from pydantic_settings import (
 )
 
 
-# === PostgreSQL конфигурация ===
 class PostgresConfig(BaseModel):
     host: str = Field(..., description="PostgreSQL host")
     port: int = Field(5432, description="PostgreSQL port")
@@ -24,6 +23,10 @@ class PostgresConfig(BaseModel):
         return f"postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
+class MlLayerConfig(BaseModel):
+    base_url: str = Field("http://localhost:8001", description="ML layer base URL")
+
+
 class PathSettings(BaseModel):
     yaml_path: Optional[str] = None
     env_path: Optional[str] = None
@@ -31,6 +34,7 @@ class PathSettings(BaseModel):
 
 class Config(BaseSettings):
     postgres: PostgresConfig
+    ml_layer: MlLayerConfig = MlLayerConfig()
     path_settings: PathSettings = PathSettings()
 
     model_config = SettingsConfigDict(

@@ -97,7 +97,7 @@ class SessionModel(Base, BaseTimestamp):
         return f"<Session {self.title}>"
 
 
-class MessageModel(Base, BaseTimestamp):
+class MessageModel(Base):
     __tablename__ = "messages"
 
     message_id: Mapped[uuid.UUID] = mapped_column(
