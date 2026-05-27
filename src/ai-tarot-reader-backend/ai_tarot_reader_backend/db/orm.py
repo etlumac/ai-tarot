@@ -55,7 +55,10 @@ class ImageModel(Base):
         Integer, primary_key=True, autoincrement=True
     )
     card_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    ui_theme: Mapped[UIThemeType] = mapped_column(Enum(UIThemeType), nullable=False)
+    ui_theme: Mapped[UIThemeType] = mapped_column(
+        Enum(UIThemeType, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
     image: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
 
     def __repr__(self) -> str:

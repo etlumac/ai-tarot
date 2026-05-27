@@ -30,12 +30,12 @@ class TarotCardEntity(BaseModel):
 
 
 class CardImageEntity(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
     image_id: int
     card_id: int
     ui_theme: UIThemeType
-    image_data: bytes
+    image: bytes
 
 
 class MessageEntity(BaseModel):
