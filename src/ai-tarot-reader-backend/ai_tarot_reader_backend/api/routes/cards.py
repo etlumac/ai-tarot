@@ -22,6 +22,6 @@ router = APIRouter(tags=["Cards"])
 async def get_card_image(
     card_id: int,
     _: DbSessionDep,
-    ui_theme: UIThemeType = Query(default=UIThemeType.PINK),
+    ui_theme: UIThemeType = Query(default=UIThemeType.PINK, alias="uiTheme"),
 ) -> Response:
     return await CardService.get_card_image(card_id=card_id, ui_theme=ui_theme)

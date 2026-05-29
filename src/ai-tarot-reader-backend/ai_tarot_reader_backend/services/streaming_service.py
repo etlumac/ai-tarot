@@ -8,7 +8,6 @@ from openai import AsyncOpenAI
 
 from ai_tarot_reader_backend.api.schemas.streaming import SseEvent
 from ai_tarot_reader_backend.configs import get_config
-from ai_tarot_reader_backend.core.errors import NotFoundError, UnauthorizedError
 from ai_tarot_reader_backend.db.data_layer.cards import CardGraphRepository
 from ai_tarot_reader_backend.db.data_layer.images import CardImageRepository
 from ai_tarot_reader_backend.db.data_layer.messages import MessageRepository
@@ -121,6 +120,7 @@ class StreamingService:
 
             cards_data = []
             card_meanings = []
+            card_titles: dict[int, str] = {}
 
             for card_id in chosen_ids:
                 image = await CardImageRepository.get_by_card_id(card_id, UIThemeType.PINK)
@@ -130,6 +130,7 @@ class StreamingService:
                 title = card_info["title"].strip('"') if card_info else f"Карта {card_id}"
                 meaning = card_info["meaning"].strip('"') if card_info else ""
 
+                card_titles[card_id] = title
                 cards_data.append({
                     "cardId": card_id,
                     "title": title,
@@ -137,13 +138,24 @@ class StreamingService:
                     "imageBase64": image.image.hex() if image else None,
                 })
                 card_meanings.append(
-                    f"{title} ({'перевёрнутая' if is_reversed else 'прямая'}): {meaning[:200]}"
+                    f"{title} ({'перевёрнутая' if is_reversed else 'прямая'}): {meaning[:500]}"
                 )
 
             event_id += 1
             yield _sse(SseEvent.cards, {"cards": cards_data}, event_id)
 
-            tone = session.tone
+            combo_meanings: list[str] = []
+            if not is_clarification and len(chosen_ids) > 1:
+                for i in range(len(chosen_ids)):
+                    for j in range(i + 1, len(chosen_ids)):
+                        id1, id2 = chosen_ids[i], chosen_ids[j]
+                        combo = await CardGraphRepository.get_combination(id1, id2)
+                        if combo:
+                            combo_meanings.append(
+                                f"{card_titles[id1]} + {card_titles[id2]}: {combo}"
+                            )
+
+            tone = session.tone if isinstance(session.tone, str) else session.tone.value
             if is_clarification:
                 system_prompt = get_clarification_prompt(tone=tone)
                 history = [
@@ -164,6 +176,10 @@ class StreamingService:
                 ]
             else:
                 system_prompt = get_system_prompt(theme=theme, tone=tone)
+                combo_block = (
+                    f"\nСочетания карт: {'; '.join(combo_meanings)}"
+                    if combo_meanings else ""
+                )
                 llm_messages = [
                     {"role": "system", "content": system_prompt},
                     {
@@ -171,6 +187,7 @@ class StreamingService:
                         "content": (
                             f"Вопрос: {user_question}\n"
                             f"Карты: {', '.join(card_meanings)}"
+                            f"{combo_block}"
                         ),
                     },
                 ]
@@ -221,5 +238,5 @@ class StreamingService:
                     session_id=UUID(session_id),
                     status=SessionStatusType.FAILED,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass

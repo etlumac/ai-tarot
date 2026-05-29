@@ -26,7 +26,7 @@ set_config(PathSettings(
 ))
 
 
-async def __init_db_connection(config: Config) -> DatabaseConnection:
+async def _init_db_connection(config: Config) -> DatabaseConnection:
     db_connection = init_db_connection(config.postgres)
     await db_connection.check_connection()
     load_models()
@@ -39,24 +39,22 @@ async def __init_db_connection(config: Config) -> DatabaseConnection:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     config: Config = get_config()
-    db_connection: DatabaseConnection = await __init_db_connection(config)
-    app.state.db_connection = db_connection
-
+    db_connection: DatabaseConnection = await _init_db_connection(config)
+    application.state.db_connection = db_connection  # type: ignore[attr-defined]
     yield
-
-    await app.state.db_connection.close()
+    await application.state.db_connection.close()  # type: ignore[attr-defined]
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(
+    application = FastAPI(
         title="AI Tarot Reader API",
         version="1.0.0",
         lifespan=lifespan,
     )
 
-    app.add_middleware(
+    application.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=True,
@@ -64,12 +62,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(sessions_router)
-    app.include_router(streaming_router)
-    app.include_router(cards_router)
-    app.include_router(user_router)
+    application.include_router(sessions_router)
+    application.include_router(streaming_router)
+    application.include_router(cards_router)
+    application.include_router(user_router)
 
-    @app.exception_handler(BaseAppError)
+    @application.exception_handler(BaseAppError)
     async def app_error_handler(request: Request, exc: BaseAppError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
@@ -81,7 +79,7 @@ def create_app() -> FastAPI:
             ).model_dump(by_alias=True),
         )
 
-    @app.exception_handler(RequestValidationError)
+    @application.exception_handler(RequestValidationError)
     async def validation_error_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
@@ -95,7 +93,7 @@ def create_app() -> FastAPI:
         )
         return await app_error_handler(request, custom_exc)
 
-    @app.exception_handler(Exception)
+    @application.exception_handler(Exception)
     async def unknown_error_handler(request: Request, exc: Exception) -> JSONResponse:
         custom_exc = BaseAppError(
             user_message="Unknown error",
@@ -103,11 +101,11 @@ def create_app() -> FastAPI:
         )
         return await app_error_handler(request, custom_exc)
 
-    @app.get("/health")
-    async def health_check():
+    @application.get("/health")
+    async def health_check() -> dict:
         return {"status": "healthy"}
 
-    return app
+    return application
 
 
 app = create_app()

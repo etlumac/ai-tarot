@@ -1,49 +1,17 @@
-from enum import Enum
 from typing import List, Literal, Optional, Union, Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
-
-# --- общие схемы ---
-
-class SessionStage(str, Enum):
-    prediction = "prediction"
-    clarification = "clarification"
-
-
-class SessionStatus(str, Enum):
-    pending = "pending"
-    in_progress = "in_progress"
-    done = "done"
-    failed = "failed"
-
-
-class Tone(str, Enum):
-    positive = "positive"
-    negative = "negative"
-    neutral = "neutral"
-
-
-class Theme(str, Enum):
-    career = "career"
-    love = "love"
-    self = "self"
-    social = "social"
-    health = "health"
-    other = "other"
-
-
-class Arcana(str, Enum):
-    major = "major"
-    minor = "minor"
-
-
-class Role(str, Enum):
-    user = "user"
-    assistant = "assistant"
-    system = "system"
+from ai_tarot_reader_backend.entities.enums import (
+    ToneType as Tone,
+    SessionStageType as SessionStage,
+    SessionStatusType as SessionStatus,
+    ThemeType as Theme,
+    MessageRoleType as Role,
+    ArcanaType as Arcana,
+)
 
 
 # --- GET /sessions ---

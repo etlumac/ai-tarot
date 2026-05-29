@@ -1,16 +1,12 @@
 from enum import Enum
-from typing import List, Literal, Union
-from uuid import UUID
+from typing import List, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 from ai_tarot_reader_backend.api.schemas.sessions import (
-    Arcana,
     CardSchema,
-    MessageSchema,
     MessageSchemaType,
-    Role,
     Theme,
 )
 

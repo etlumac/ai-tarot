@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from fastapi.responses import Response
 
 from ai_tarot_reader_backend.core.errors import NotFoundError
