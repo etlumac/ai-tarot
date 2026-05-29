@@ -18,6 +18,7 @@ name = "ai-tarot-reader-backend"
 version = "0.1.0"
 source = { editable = "src/ai-tarot-reader-backend" }
 dependencies = [
+    { name = "ai-tatrot-reader-ml-layer" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -31,6 +32,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ai-tatrot-reader-ml-layer", editable = "src/ai-tatrot-reader-ml-layer" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "fastapi", specifier = ">=0.136.1" },
     { name = "httpx", specifier = ">=0.28.1" },
@@ -45,7 +47,7 @@ requires-dist = [
 [[package]]
 name = "ai-tatrot-reader-ml-layer"
 version = "0.1.0"
-source = { virtual = "src/ai-tatrot-reader-ml-layer" }
+source = { editable = "src/ai-tatrot-reader-ml-layer" }
 dependencies = [
     { name = "catboost" },
     { name = "numpy" },
