@@ -13,12 +13,15 @@ from ai_tarot_reader_backend.api.schemas.sessions import (
     Tone,
     Theme,
 )
-
 from ai_tarot_reader_backend.core.errors import NotFoundError, UnauthorizedError
+from ai_tarot_reader_backend.db.data_layer.messages import MessageRepository
 from ai_tarot_reader_backend.db.data_layer.sessions import SessionRepository
 from ai_tarot_reader_backend.db.data_layer.users import UserRepository
-from ai_tarot_reader_backend.entities.enums import SessionStageType, SessionStatusType
-from ai_tarot_reader_backend.services import ml_client
+from ai_tarot_reader_backend.entities.enums import (
+    MessageRoleType,
+    SessionStageType,
+    SessionStatusType,
+)
 
 
 class SessionService:
@@ -37,13 +40,12 @@ class SessionService:
                 SessionListItem(
                     session_id=s.session_id,
                     title=s.title,
-                    stage=SessionStage(s.stage.value),
-                    status=SessionStatus(s.status.value),
+                    stage=SessionStage(s.stage),
+                    status=SessionStatus(s.status),
                 )
                 for s in sessions
             ]
         )
-
 
     @staticmethod
     async def get_session(ip: str, session_id: str) -> SessionResponse:
@@ -64,11 +66,11 @@ class SessionService:
                 developer_message=f"Session {session_id} not found for user {ip}",
             )
         return SessionResponse(
-            stage=SessionStage(session.stage.value),
-            status=SessionStatus(session.status.value),
-            tone=session.tone,
+            stage=SessionStage(session.stage),
+            status=SessionStatus(session.status),
+            tone=Tone(session.tone),
             title=session.title,
-            theme=session.theme,
+            theme=Theme(session.theme) if session.theme else None,
             messages=[],
         )
 
@@ -81,23 +83,30 @@ class SessionService:
                 developer_message=f"User with ip={ip} not found",
             )
 
-        session_id = uuid.uuid7()
+        session_id = uuid.uuid4()
 
         session = await SessionRepository.create(
             session_id=session_id,
             user_id=user.user_id,
-            tone=body.tone.value,
-            stage=SessionStageType.PREDICTION.value,
+            tone=body.tone,
+            stage=SessionStageType.PREDICTION,
             title=None,
+        )
+
+        await MessageRepository.create(
+            message_id=uuid.uuid4(),
+            session_id=session.session_id,
+            role=MessageRoleType.USER,
+            content=body.message,
         )
 
         return PredictionResponse(session_id=session.session_id)
 
     @staticmethod
     async def create_clarification(
-            ip: str,
-            session_id: str,
-            body: ClarificationRequest,
+        ip: str,
+        session_id: str,
+        body: ClarificationRequest,
     ) -> PredictionResponse:
         user = await UserRepository.get_by_ip(ip)
         if not user:
@@ -118,8 +127,15 @@ class SessionService:
 
         await SessionRepository.update_state(
             session_id=UUID(session_id),
-            status=SessionStatusType.PENDING.value,
-            stage=SessionStageType.CLARIFICATION.value,
+            status=SessionStatusType.PENDING,
+            stage=SessionStageType.CLARIFICATION,
+        )
+
+        await MessageRepository.create(
+            message_id=uuid.uuid4(),
+            session_id=UUID(session_id),
+            role=MessageRoleType.USER,
+            content=body.message,
         )
 
         return PredictionResponse(session_id=UUID(session_id))

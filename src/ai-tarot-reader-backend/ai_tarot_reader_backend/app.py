@@ -31,6 +31,10 @@ async def __init_db_connection(config: Config) -> DatabaseConnection:
     await db_connection.check_connection()
     load_models()
     await db_connection.init_schema()
+
+    from ai_tarot_reader_backend.services.prompts import load_prompts
+    load_prompts(str(_app_dir / "prompts.yaml"))
+
     return db_connection
 
 

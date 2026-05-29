@@ -8,7 +8,7 @@ def _ml_base_url() -> str:
 
 
 async def validate_message(message: str) -> dict:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(trust_env=False) as client:
         response = await client.post(
             f"{_ml_base_url()}/safety-router/validate",
             json={"message": message},
@@ -19,7 +19,7 @@ async def validate_message(message: str) -> dict:
 
 
 async def classify_message(message: str) -> dict:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(trust_env=False) as client:
         response = await client.post(
             f"{_ml_base_url()}/classifier/classify",
             json={"message": message},

@@ -21,7 +21,7 @@ class MessageRepository:
             new_msg = MessageModel(
                 message_id=message_id,
                 session_id=session_id,
-                role=role,
+                role=role.value,
                 content=content
             )
             session.add(new_msg)

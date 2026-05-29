@@ -71,14 +71,23 @@ class SessionModel(Base, BaseTimestamp):
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid7
     )
-    tone: Mapped[ToneType] = mapped_column(Enum(ToneType), nullable=False)
+    tone: Mapped[ToneType] = mapped_column(
+        Enum(ToneType, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
     status: Mapped[SessionStatusType] = mapped_column(
-        Enum(SessionStatusType),
+        Enum(SessionStatusType, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=SessionStatusType.PENDING
     )
-    stage: Mapped[SessionStageType] = mapped_column(Enum(SessionStageType), nullable=False)
-    theme: Mapped[Optional[ThemeType]] = mapped_column(Enum(ThemeType), nullable=True)
+    stage: Mapped[SessionStageType] = mapped_column(
+        Enum(SessionStageType, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
+    theme: Mapped[Optional[ThemeType]] = mapped_column(
+        Enum(ThemeType, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        nullable=True
+    )
 
     prediction_cards: Mapped[Optional[List[int]]] = mapped_column(ARRAY(Integer), nullable=True)
     clarification_card: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -97,13 +106,16 @@ class SessionModel(Base, BaseTimestamp):
         return f"<Session {self.title}>"
 
 
-class MessageModel(Base):
+class MessageModel(Base, BaseTimestamp):
     __tablename__ = "messages"
 
     message_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid7
     )
-    role: Mapped[MessageRoleType] = mapped_column(Enum(MessageRoleType), nullable=False)
+    role: Mapped[MessageRoleType] = mapped_column(
+        Enum(MessageRoleType, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

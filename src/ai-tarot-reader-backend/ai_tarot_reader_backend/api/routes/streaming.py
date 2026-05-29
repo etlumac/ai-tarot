@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from ai_tarot_reader_backend.api.dependencies import CurrentIpDep, SessionIdDep
+from ai_tarot_reader_backend.api.dependencies import CurrentIpDep, DbSessionDep, SessionIdDep
 from ai_tarot_reader_backend.core.errors import ErrorResponse
 from ai_tarot_reader_backend.services.streaming_service import StreamingService
 
@@ -21,8 +21,13 @@ router = APIRouter(tags=["Streaming"])
 async def get_session_streaming(
     ip: CurrentIpDep,
     session_id: SessionIdDep,
+    _: DbSessionDep,
 ) -> StreamingResponse:
     return StreamingResponse(
         StreamingService.stream(ip=ip, session_id=session_id),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # отключает буферизацию в nginx
+        },
     )

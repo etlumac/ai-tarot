@@ -27,6 +27,12 @@ class MlLayerConfig(BaseModel):
     base_url: str = Field("http://localhost:8001", description="ML layer base URL")
 
 
+class OpenRouterConfig(BaseModel):
+    api_key: SecretStr = Field(..., description="OpenRouter API key")
+    model: str = Field("openrouter/free", description="Model to use")
+    base_url: str = Field("https://openrouter.ai/api/v1")
+
+
 class PathSettings(BaseModel):
     yaml_path: Optional[str] = None
     env_path: Optional[str] = None
@@ -35,6 +41,7 @@ class PathSettings(BaseModel):
 class Config(BaseSettings):
     postgres: PostgresConfig
     ml_layer: MlLayerConfig = MlLayerConfig()
+    open_router: OpenRouterConfig
     path_settings: PathSettings = PathSettings()
 
     model_config = SettingsConfigDict(
