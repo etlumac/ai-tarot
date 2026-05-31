@@ -39,14 +39,11 @@ class SessionRepository:
     async def get_by_id(
             session_id: UUID,
             user_id: Optional[UUID] = None,
-            with_messages: bool = False
     ) -> Optional[SessionEntity]:
         async with transactional() as session:
             stmt = select(SessionModel).where(SessionModel.session_id == session_id)
             if user_id:
                 stmt = stmt.where(SessionModel.user_id == user_id)
-            if with_messages:
-                stmt = stmt.options(selectinload(SessionModel.messages))
 
             result = await session.execute(stmt)
             session_obj = result.unique().scalar_one_or_none()

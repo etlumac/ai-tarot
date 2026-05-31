@@ -155,7 +155,7 @@ class StreamingService:
                                 f"{card_titles[id1]} + {card_titles[id2]}: {combo}"
                             )
 
-            tone = session.tone if isinstance(session.tone, str) else session.tone.value
+            tone = session.tone.value
             if is_clarification:
                 system_prompt = get_clarification_prompt(tone=tone)
                 history = [

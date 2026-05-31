@@ -42,6 +42,11 @@ class UnauthorizedError(BaseAppError):
     status_code: ClassVar[int] = 401
 
 
+class ForbiddenError(BaseAppError):
+    error_code: ClassVar[str] = "Forbidden"
+    status_code: ClassVar[int] = 403
+
+
 class NotFoundError(BaseAppError):
     error_code: ClassVar[str] = "NotFoundError"
     status_code: ClassVar[int] = 404
@@ -55,3 +60,8 @@ class ResourceAlreadyExistsError(BaseAppError):
 class IncompatibleParamsError(BaseAppError):
     error_code: ClassVar[str] = "IncompatibleParamsError"
     status_code: ClassVar[int] = 422
+
+
+class IncompatibleStateError(BaseAppError):
+    error_code: ClassVar[str] = "IncompatibleStateError"
+    status_code: ClassVar[int] = 409

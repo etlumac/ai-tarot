@@ -42,3 +42,16 @@ class MessageRoleType(str, Enum):
 class UIThemeType(str, Enum):
     PINK = "pink"
     GOLD = "gold"
+
+
+class EventType(str, Enum):
+    ERROR = "error"
+    MESSAGE = "message"
+    TITLE = "title"
+    THEME = "theme"
+    DONE = "done"
+
+
+class ObjectType(str, Enum):
+    MESSAGE = "message"
+    CARD = "card"

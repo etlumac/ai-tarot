@@ -14,12 +14,12 @@ class CardGraphRepository:
             await session.execute(text("SET search_path TO ag_catalog, public"))
             result = await session.execute(
                 text(f"""
-                    SELECT card_id, title, meaning
+                    SELECT card_id, title, meaning, arcana, reversed
                     FROM cypher('tarot_graph', $$
                         MATCH (c:Card)
                         WHERE c.card_id = {card_id}
-                        RETURN c.card_id, c.title, c.meaning
-                    $$) AS (card_id agtype, title agtype, meaning agtype)
+                        RETURN c.card_id, c.title, c.meaning, c.arcana, c.reversed
+                    $$) AS (card_id agtype, title agtype, meaning agtype, arcana agtype, reversed agtype)
                 """)
             )
             row = result.fetchone()
@@ -29,6 +29,8 @@ class CardGraphRepository:
                 "card_id": card_id,
                 "title": str(row[1]).strip('"'),
                 "meaning": str(row[2]).strip('"'),
+                "arcana": str(row[3]).strip('"'),
+                "reversed": str(row[4]).strip('"'),
             }
 
     @staticmethod

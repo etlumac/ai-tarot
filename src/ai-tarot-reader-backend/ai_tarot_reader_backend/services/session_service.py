@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from uuid import UUID
 
 from ai_tarot_reader_backend.api.schemas.sessions import (
@@ -10,21 +11,31 @@ from ai_tarot_reader_backend.api.schemas.sessions import (
     SessionResponse,
     SessionStage,
     SessionStatus,
+    MessageSchema,
+    CardSchema,
+    MessageSchemaType,
     Tone,
     Theme,
 )
-from ai_tarot_reader_backend.core.errors import NotFoundError, UnauthorizedError
+from ai_tarot_reader_backend.core.errors import ForbiddenError, UnauthorizedError
 from ai_tarot_reader_backend.db.data_layer.messages import MessageRepository
 from ai_tarot_reader_backend.db.data_layer.sessions import SessionRepository
 from ai_tarot_reader_backend.db.data_layer.users import UserRepository
+from ai_tarot_reader_backend.db.data_layer.cards import CardGraphRepository
+from ai_tarot_reader_backend.entities.domain import SessionEntity
 from ai_tarot_reader_backend.entities.enums import (
     MessageRoleType,
     SessionStageType,
     SessionStatusType,
+    ObjectType
 )
+from ai_tarot_reader_backend.services.predictions import PredictionService
 
 
 class SessionService:
+
+    def __init__(self, prediction_service: PredictionService):
+        self.prediction_service = prediction_service
 
     @staticmethod
     async def get_sessions_by_ip(ip: str) -> SessionListResponse:
@@ -48,7 +59,45 @@ class SessionService:
         )
 
     @staticmethod
-    async def get_session(ip: str, session_id: str) -> SessionResponse:
+    async def __form_card_messages(session: SessionEntity) -> list[CardSchema]:
+        prediction_cards_ids = session.prediction_cards
+        cards =[]
+        if prediction_cards_ids:
+            for card_id in prediction_cards_ids:
+                card_info = await CardGraphRepository.get_card_data(card_id)
+
+                title = card_info["title"].strip('"')
+                meaning = card_info["meaning"].strip('"')
+                arcana = card_info["arcana"].strip('"')
+                reversed = card_info["reversed"]
+                card = CardSchema.model_validate({
+                    "objectType": ObjectType.CARD.value,
+                    "cardId": card_id,
+                    "title": title,
+                    "arcana": arcana,
+                    "meaning": meaning,
+                    "reversed": reversed
+                })
+                cards.append(card)
+        if session.clarification_card:
+            clarification_card_info = await CardGraphRepository.get_card_data(session.clarification_card)
+
+            title = clarification_card_info["title"].strip('"')
+            meaning = clarification_card_info["meaning"].strip('"')
+            arcana = clarification_card_info["arcana"].strip('"')
+            reversed = clarification_card_info["reversed"]
+            card = CardSchema.model_validate({
+                "objectType": ObjectType.CARD.value,
+                "cardId": session.clarification_card,
+                "title": title,
+                "arcana": arcana,
+                "meaning": meaning,
+                "reversed": reversed
+            })
+            cards.append(card)
+        return cards
+
+    async def get_session(self, ip: str, session_id: str) -> SessionResponse:
         user = await UserRepository.get_by_ip(ip)
         if not user:
             raise UnauthorizedError(
@@ -58,24 +107,26 @@ class SessionService:
         session = await SessionRepository.get_by_id(
             session_id=UUID(session_id),
             user_id=user.user_id,
-            with_messages=True,
         )
         if not session:
-            raise NotFoundError(
+            raise ForbiddenError(
                 user_message="Session not found",
                 developer_message=f"Session {session_id} not found for user {ip}",
             )
+        messages = await MessageRepository.get_by_session(session.session_id)
+        text_messages = [MessageSchema(object_type="message", role=message.role, content=message.content) for message in messages]
+        card_messages = await self.__form_card_messages(session)
+        text_messages.extend(card_messages)
         return SessionResponse(
             stage=SessionStage(session.stage),
             status=SessionStatus(session.status),
             tone=Tone(session.tone),
             title=session.title,
             theme=Theme(session.theme) if session.theme else None,
-            messages=[],
+            messages=text_messages,
         )
 
-    @staticmethod
-    async def create_prediction(ip: str, body: PredictionRequest) -> PredictionResponse:
+    async def create_prediction(self, ip: str, body: PredictionRequest) -> PredictionResponse:
         user = await UserRepository.get_by_ip(ip)
         if not user:
             raise UnauthorizedError(
@@ -83,7 +134,7 @@ class SessionService:
                 developer_message=f"User with ip={ip} not found",
             )
 
-        session_id = uuid.uuid4()
+        session_id = uuid.uuid7()
 
         session = await SessionRepository.create(
             session_id=session_id,
@@ -94,11 +145,12 @@ class SessionService:
         )
 
         await MessageRepository.create(
-            message_id=uuid.uuid4(),
+            message_id=uuid.uuid7(),
             session_id=session.session_id,
             role=MessageRoleType.USER,
             content=body.message,
         )
+        asyncio.create_task(self.prediction_service.prediction_pipeline(session_id, body.message, body.tone))
 
         return PredictionResponse(session_id=session.session_id)
 
@@ -120,7 +172,7 @@ class SessionService:
             user_id=user.user_id,
         )
         if not session:
-            raise NotFoundError(
+            raise ForbiddenError(
                 user_message="Session not found",
                 developer_message=f"Session {session_id} not found for user {ip}",
             )
@@ -132,7 +184,7 @@ class SessionService:
         )
 
         await MessageRepository.create(
-            message_id=uuid.uuid4(),
+            message_id=uuid.uuid7(),
             session_id=UUID(session_id),
             role=MessageRoleType.USER,
             content=body.message,

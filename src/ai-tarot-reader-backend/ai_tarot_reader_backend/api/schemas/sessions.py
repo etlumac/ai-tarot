@@ -76,7 +76,7 @@ class MessageSchema(BaseModel):
 
 class CardSchema(BaseModel):
     object_type: Literal["card"]
-    card_id: UUID
+    card_id: int
     title: str
     meaning: str
     arcana: Arcana

@@ -1,4 +1,5 @@
 import asyncio
+import asyncpg
 import contextvars
 import uuid
 from collections.abc import AsyncGenerator
@@ -28,10 +29,11 @@ class SessionContextError(RuntimeError):
 
 
 class DatabaseConnection:
-    def __init__(self, engine: AsyncEngine, factory: async_sessionmaker, db_config: PostgresConfig) -> None:
+    def __init__(self, engine: AsyncEngine, factory: async_sessionmaker, db_config: PostgresConfig, notifications_pool: asyncpg.Pool) -> None:
         self._engine = engine
         self._factory = factory
         self.config = db_config
+        self.notifications_pool = notifications_pool
 
     @property
     def factory(self) -> async_sessionmaker:
@@ -74,6 +76,7 @@ class DatabaseConnection:
     async def close(self) -> None:
         """Закрывает пул соединений и освобождает ресурсы"""
         await self._engine.dispose()
+        await self.notifications_pool.close()
         logger.info("Database connections closed")
 
 
@@ -88,7 +91,7 @@ def get_session() -> AsyncSession:
     return session
 
 
-def init_db_connection(db_config: PostgresConfig) -> DatabaseConnection:
+async def init_db_connection(db_config: PostgresConfig) -> DatabaseConnection:
     """Создаёт engine и фабрику сессий на основе конфигурации"""
     password = db_config.password.get_secret_value() if db_config.password else ""
 
@@ -108,10 +111,18 @@ def init_db_connection(db_config: PostgresConfig) -> DatabaseConnection:
         expire_on_commit=False,
         autobegin=False,
     )
+    pool = await asyncpg.create_pool(
+        dsn=database_url.replace("+asyncpg", ""),
+        min_size=5,
+        max_size=40,  # = макс. одновременных SSE-клиентов + запас под CRUD
+        max_queries=50000,  # Авто-переподключение при утечках
+        max_inactive_connection_lifetime=300,  # 5 мин idle -> возврат в ОС
+        command_timeout=30,
+    )
     logger.info(
         f"Database connection initialized: {db_config.host}:{db_config.port}/{db_config.database}"
     )
-    return DatabaseConnection(engine, factory, db_config)
+    return DatabaseConnection(engine, factory, db_config, pool)
 
 
 @asynccontextmanager

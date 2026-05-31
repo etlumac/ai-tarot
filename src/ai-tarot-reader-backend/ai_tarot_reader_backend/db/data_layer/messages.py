@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -12,16 +12,16 @@ from ai_tarot_reader_backend.entities.enums import MessageRoleType
 class MessageRepository:
     @staticmethod
     async def create(
-        message_id: UUID,
-        session_id: UUID,
-        role: MessageRoleType,
-        content: str
+            message_id: UUID,
+            session_id: UUID,
+            role: MessageRoleType,
+            content: str
     ) -> MessageEntity:
         async with transactional() as session:
             new_msg = MessageModel(
                 message_id=message_id,
                 session_id=session_id,
-                role=role.value,
+                role=role,
                 content=content
             )
             session.add(new_msg)
@@ -37,3 +37,12 @@ class MessageRepository:
             )
             result = await session.execute(stmt)
             return [MessageEntity.model_validate(msg) for msg in result.scalars().all()]
+
+    @staticmethod
+    async def get_by_id(message_id: UUID) -> Optional[MessageEntity]:
+        async with transactional() as session:
+            stmt = select(MessageModel).where(MessageModel.message_id == message_id)
+
+            result = await session.execute(stmt)
+            message_obj = result.unique().scalar_one_or_none()
+            return MessageEntity.model_validate(message_obj) if message_obj else None

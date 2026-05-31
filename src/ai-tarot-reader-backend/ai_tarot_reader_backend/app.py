@@ -15,7 +15,9 @@ from ai_tarot_reader_backend.api.routes.user import router as user_router
 from ai_tarot_reader_backend.core.errors import ErrorResponse, BaseAppError, ValidationError
 from ai_tarot_reader_backend.core.database import DatabaseConnection, init_db_connection
 from ai_tarot_reader_backend.configs import set_config, get_config, PathSettings, Config
-from ai_tarot_reader_backend.db import load_models
+from ai_tarot_reader_backend.services.prompts import load_prompts
+from ai_tarot_reader_backend.services.ml_client import MLClient
+from ai_tarot_reader_backend.services.llm import LLMClient
 
 SERVICE_NAME = "OAPI_TARO_BACKEND/001.00"
 
@@ -27,24 +29,23 @@ set_config(PathSettings(
 
 
 async def _init_db_connection(config: Config) -> DatabaseConnection:
-    db_connection = init_db_connection(config.postgres)
+    db_connection = await init_db_connection(config.postgres)
     await db_connection.check_connection()
-    load_models()
-    await db_connection.init_schema()
-
-    from ai_tarot_reader_backend.services.prompts import load_prompts
-    load_prompts(str(_app_dir / "prompts.yaml"))
-
     return db_connection
 
 
 @asynccontextmanager
-async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config: Config = get_config()
     db_connection: DatabaseConnection = await _init_db_connection(config)
-    application.state.db_connection = db_connection  # type: ignore[attr-defined]
+    load_prompts(str(_app_dir / "prompts.yaml"))
+    app.state.db_connection = db_connection  # type: ignore[attr-defined]
+    app.state.ml_client = MLClient()
+    app.state.llm_client = LLMClient()
     yield
-    await application.state.db_connection.close()  # type: ignore[attr-defined]
+    await app.state.db_connection.close()  # type: ignore[attr-defined]
+    await app.state.ml_client.close()
+    await app.state.llm_client.close()
 
 
 def create_app() -> FastAPI:

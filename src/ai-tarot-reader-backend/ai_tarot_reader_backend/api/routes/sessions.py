@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from ai_tarot_reader_backend.api.dependencies import CurrentIpDep, DbSessionDep, SessionIdDep
+from ai_tarot_reader_backend.api.dependencies import CurrentIpDep, DbSessionDep, SessionIdDep, SessionServiceDep
 from ai_tarot_reader_backend.api.schemas.sessions import (
     PredictionRequest,
     PredictionResponse,
@@ -8,7 +8,7 @@ from ai_tarot_reader_backend.api.schemas.sessions import (
     ClarificationRequest,
 )
 from ai_tarot_reader_backend.core.errors import ErrorResponse
-from ai_tarot_reader_backend.services.session_service import SessionService
+
 
 router = APIRouter(tags=["Sessions"])
 
@@ -23,10 +23,11 @@ router = APIRouter(tags=["Sessions"])
     },
 )
 async def get_sessions(
-    ip: CurrentIpDep,
-    _: DbSessionDep,
+        ip: CurrentIpDep,
+        session_service: SessionServiceDep,
+        _: DbSessionDep,
 ) -> SessionListResponse:
-    return await SessionService.get_sessions_by_ip(ip)
+    return await session_service.get_sessions_by_ip(ip)
 
 
 @router.post(
@@ -41,11 +42,12 @@ async def get_sessions(
     },
 )
 async def create_prediction(
-    body: PredictionRequest,
-    ip: CurrentIpDep,
-    _: DbSessionDep,
+        body: PredictionRequest,
+        ip: CurrentIpDep,
+        session_service: SessionServiceDep,
+        _: DbSessionDep,
 ) -> PredictionResponse:
-    return await SessionService.create_prediction(ip=ip, body=body)
+    return await session_service.create_prediction(ip=ip, body=body)
 
 
 @router.get(
@@ -59,11 +61,12 @@ async def create_prediction(
     },
 )
 async def get_session(
-    ip: CurrentIpDep,
-    session_id: SessionIdDep,
-    _: DbSessionDep,
+        ip: CurrentIpDep,
+        session_id: SessionIdDep,
+        session_service: SessionServiceDep,
+        _: DbSessionDep,
 ) -> SessionResponse:
-    return await SessionService.get_session(ip=ip, session_id=session_id)
+    return await session_service.get_session(ip=ip, session_id=session_id)
 
 
 @router.post(
@@ -81,8 +84,7 @@ async def create_clarification(
         body: ClarificationRequest,
         ip: CurrentIpDep,
         session_id: SessionIdDep,
+        session_service: SessionServiceDep,
         _: DbSessionDep,
 ) -> PredictionResponse:
-    return await SessionService.create_clarification(ip=ip, session_id=session_id, body=body)
-
-
+    return await session_service.create_clarification(ip=ip, session_id=session_id, body=body)
