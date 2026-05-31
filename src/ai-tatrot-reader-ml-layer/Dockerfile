@@ -44,7 +44,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /tmp/hf_cache /tmp/hf_cache
 
 COPY src/ai-tatrot-reader-ml-layer ./src/ai-tatrot-reader-ml-layer
 
