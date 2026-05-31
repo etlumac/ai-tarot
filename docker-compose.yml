@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: taro-backend
+    image: ghcr.io/etlumac/ai-tarot/taro-backend:latest
     container_name: taro_backend
     ports:
       - "8002:8000"
@@ -34,7 +34,7 @@ services:
     restart: unless-stopped
   
   ml-layer:
-    image: taro-ml-layer
+    image: ghcr.io/etlumac/ai-tarot/taro-ml-layer:latest
     container_name: taro_ml_layer
     ports:
       - "8001:8001"
