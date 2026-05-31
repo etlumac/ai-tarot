@@ -1,0 +1,83 @@
+name: CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  GITHUB_OWNER_RAW: ${{ github.repository_owner }}
+  GITHUB_REPO_RAW: ${{ github.event.repository.name }}
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Normalize names to lowercase
+        run: |
+          echo "OWNER_LOWER=$(echo "$GITHUB_OWNER_RAW" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "REPO_LOWER=$(echo "$GITHUB_REPO_RAW" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .  
+          file: ./src/ai-tarot-reader-backend/Dockerfile
+          push: true
+          load: true 
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER_LOWER }}/${{ env.REPO_LOWER }}/taro-backend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LOWER }}/${{ env.REPO_LOWER }}/taro-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-ml-layer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Normalize names to lowercase
+        run: |
+          echo "OWNER_LOWER=$(echo "$GITHUB_OWNER_RAW" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "REPO_LOWER=$(echo "$GITHUB_REPO_RAW" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .  
+          file: ./src/ai-tatrot-reader-ml-layer/Dockerfile
+          push: true
+          load: true 
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER_LOWER }}/${{ env.REPO_LOWER }}/taro-ml-layer:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LOWER }}/${{ env.REPO_LOWER }}/taro-ml-layer:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

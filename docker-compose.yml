@@ -1,0 +1,55 @@
+services:
+  
+  frontend:
+    image: taro-frontend
+    container_name: taro_frontend
+    environment:
+      - BACKEND_HOST=http://backend:8000
+    ports:
+      - "81:80"
+    networks:
+      - taro_network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    image: taro-backend
+    container_name: taro_backend
+    ports:
+      - "8002:8000"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - ./config.yml:/app/src/ai-tarot-reader-backend/config.yml:ro
+    networks:
+      - taro_network
+    restart: unless-stopped
+  
+  ml-layer:
+    image: taro-ml-layer
+    container_name: taro_ml_layer
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - taro_network
+    restart: unless-stopped
+
+
+networks:
+  taro_network:
+    driver: bridge
+
