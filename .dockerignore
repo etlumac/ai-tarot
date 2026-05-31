@@ -1,4 +1,5 @@
 .venv
 Dockerfile
 **/.env
+**/.env.local
 **/config.yml
