@@ -44,6 +44,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    volumes:
+      - ./models:/app/src/ai-tatrot-reader-ml-layer/models:ro
     networks:
       - taro_network
     restart: unless-stopped
