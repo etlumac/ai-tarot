@@ -7,3 +7,6 @@ postgres:
 
 ml_layer:
   base_url: http://localhost:8001
+
+cleanup:
+  sessions_older_than_days: 30

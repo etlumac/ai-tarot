@@ -27,6 +27,10 @@ class MlLayerConfig(BaseModel):
     base_url: str = Field("http://localhost:8001", description="ML layer base URL")
 
 
+class CleanupConfig(BaseModel):
+    sessions_older_than_days: int = Field(30, description="Удалять сессии старше N дней")
+
+
 class OpenRouterConfig(BaseModel):
     api_key: SecretStr = Field(..., description="OpenRouter API key")
     model: str = Field("openrouter/free", description="Model to use")
@@ -41,12 +45,13 @@ class PathSettings(BaseModel):
 class Config(BaseSettings):
     postgres: PostgresConfig
     ml_layer: MlLayerConfig = MlLayerConfig()
+    cleanup: CleanupConfig = CleanupConfig()
     open_router: OpenRouterConfig
     path_settings: PathSettings = PathSettings()
 
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",
-        extra="ignore",  # игнорировать лишние переменные окружения
+        extra="ignore",
     )
 
     @classmethod
