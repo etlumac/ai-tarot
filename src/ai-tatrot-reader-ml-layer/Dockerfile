@@ -35,8 +35,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PIP_RETRIES=5 \
     UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple" \
     UV_NO_CACHE=1 \
-    TRANSFORMERS_OFFLINE=1 \
-    HF_DATASETS_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=0 \
+    HF_DATASETS_OFFLINE=0 \
     HF_HOME="/tmp/hf_cache"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -44,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /tmp/hf_cache /tmp/hf_cache
 
 COPY src/ai-tatrot-reader-ml-layer ./src/ai-tatrot-reader-ml-layer
 
