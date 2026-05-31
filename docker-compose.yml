@@ -1,7 +1,7 @@
 services:
   
   frontend:
-    image: taro-frontend
+    image: ghcr.io/asmat1k/taro/taro-frontend:latest
     container_name: taro_frontend
     environment:
       - BACKEND_HOST=http://backend:8000
