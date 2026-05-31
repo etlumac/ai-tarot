@@ -2,7 +2,6 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
-RUN useradd --create-home --shell /bin/bash appuser
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
 ENV PIP_TRUSTED_HOST="mirrors.aliyun.com"
@@ -23,10 +22,6 @@ COPY src/ai-tarot-reader-backend ./src/ai-tarot-reader-backend
 
 RUN pip install --no-cache-dir uv && \
     uv sync --frozen --no-dev --package ai-tarot-reader-backend
-
-
-RUN chown -R appuser:appuser /app
-USER appuser
 
 EXPOSE 8000
 
