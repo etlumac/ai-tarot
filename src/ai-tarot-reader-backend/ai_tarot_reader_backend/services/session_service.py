@@ -154,8 +154,8 @@ class SessionService:
 
         return PredictionResponse(session_id=session.session_id)
 
-    @staticmethod
     async def create_clarification(
+        self,
         ip: str,
         session_id: str,
         body: ClarificationRequest,
@@ -176,6 +176,7 @@ class SessionService:
                 user_message="Session not found",
                 developer_message=f"Session {session_id} not found for user {ip}",
             )
+        messages = await MessageRepository.get_by_session(session.session_id)
 
         await SessionRepository.update_state(
             session_id=UUID(session_id),
@@ -189,5 +190,6 @@ class SessionService:
             role=MessageRoleType.USER,
             content=body.message,
         )
+        asyncio.create_task(self.prediction_service.clarification_pipeline(session, body.message, messages))
 
         return PredictionResponse(session_id=UUID(session_id))

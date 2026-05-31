@@ -149,7 +149,7 @@ class PredictionService:
             except Exception as e:
                 error = {
                     "errorType": e.__class__.__name__,
-                    "userMessage": str(e)
+                    "userMessage": "error"
                 }
                 logger.exception(f"Error in prediction pipeline: {str(e)}")
                 try:
@@ -256,7 +256,7 @@ class PredictionService:
             except Exception as e:
                 error = {
                     "errorType": e.__class__.__name__,
-                    "userMessage": str(e)
+                    "userMessage": "error"
                 }
                 logger.exception(f"Error in prediction pipeline: {str(e)}")
                 try:

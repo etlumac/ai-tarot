@@ -9,6 +9,7 @@ class LLMClient:
         self.client = AsyncOpenAI(
             base_url=config.open_router.base_url,
             api_key=config.open_router.api_key.get_secret_value(),
+            max_retries=5
         )
         self.model = config.open_router.model
 
